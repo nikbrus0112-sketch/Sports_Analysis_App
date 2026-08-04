@@ -19,3 +19,6 @@ venv/
 # Editors
 .vscode/
 .idea/
+
+# Subagent-driven development scratch workspace (ledgers, briefs, reports)
+.superpowers/
