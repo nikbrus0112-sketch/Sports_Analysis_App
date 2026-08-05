@@ -64,6 +64,9 @@ export function App() {
               referenceSequence={comparison.referenceSequence}
               path={comparison.path}
               flags={comparison.flags}
+              referenceClipCount={comparison.referenceClips.length}
+              selectedClipIndex={comparison.selectedClipIndex}
+              onSelectReferenceClip={comparison.selectReferenceClip}
             />
           ) : (
             <>
