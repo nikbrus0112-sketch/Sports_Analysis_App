@@ -19,4 +19,9 @@ describe('FileUpload', () => {
     render(<FileUpload onFileSelected={vi.fn()} disabled />)
     expect(screen.getByTestId('file-upload-input')).toBeDisabled()
   })
+
+  it('uses a custom data-testid when provided', () => {
+    render(<FileUpload onFileSelected={vi.fn()} testId="reference-file-upload-input" />)
+    expect(screen.getByTestId('reference-file-upload-input')).toBeInTheDocument()
+  })
 })
