@@ -1,122 +1,66 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useCallback, useState } from 'react'
+import { FileUpload } from './components/FileUpload'
+import { ProcessingProgress } from './components/ProcessingProgress'
+import { VideoPoseViewer } from './components/VideoPoseViewer'
+import { usePoseEstimation } from './hooks/usePoseEstimation'
+import type { PoseSequence } from './lib/poseTypes'
 
-function App() {
-  const [count, setCount] = useState(0)
+const TARGET_FPS = 30
+
+type AppState = 'idle' | 'processing' | 'ready'
+
+export function App() {
+  const [state, setState] = useState<AppState>('idle')
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
+  const [progress, setProgress] = useState({ current: 0, total: 0 })
+  const [poseSequence, setPoseSequence] = useState<PoseSequence | null>(null)
+  const { estimateSequence } = usePoseEstimation()
+
+  const handleFileSelected = (file: File) => {
+    const url = URL.createObjectURL(file)
+    setVideoUrl(url)
+    setPoseSequence(null)
+    setProgress({ current: 0, total: 0 })
+    setState('processing')
+  }
+
+  const handleVideoElementReady = useCallback(
+    (video: HTMLVideoElement) => {
+      const run = async () => {
+        const sequence = await estimateSequence(video, {
+          targetFps: TARGET_FPS,
+          onProgress: (current, total) => setProgress({ current, total }),
+        })
+        video.currentTime = 0
+        setPoseSequence(sequence)
+        setState('ready')
+      }
+      run()
+    },
+    [estimateSequence]
+  )
+
+  const handleReset = () => {
+    if (videoUrl) URL.revokeObjectURL(videoUrl)
+    setVideoUrl(null)
+    setPoseSequence(null)
+    setState('idle')
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    <div>
+      {state === 'idle' && <FileUpload onFileSelected={handleFileSelected} />}
+      {(state === 'processing' || state === 'ready') && videoUrl && (
+        <>
+          {state === 'processing' && <ProcessingProgress current={progress.current} total={progress.total} />}
+          <VideoPoseViewer
+            videoUrl={videoUrl}
+            poseSequence={poseSequence}
+            onVideoElementReady={handleVideoElementReady}
+          />
+          {state === 'ready' && <button onClick={handleReset}>Try another video</button>}
+        </>
+      )}
+    </div>
   )
 }
-
-export default App
