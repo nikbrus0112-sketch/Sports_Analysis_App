@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeFeatureVectors, FEATURE_VECTOR_LENGTH } from './featureVector'
+import { computeAngleRows, computeFeatureVectors, FEATURE_VECTOR_LENGTH } from './featureVector'
 import { JOINT_ANGLE_NAMES, LEFT_ELBOW, LEFT_SHOULDER, LEFT_WRIST } from './jointAngles'
 import type { Landmark, PoseFrame, PoseSequence } from './poseTypes'
 
@@ -81,5 +81,14 @@ describe('computeFeatureVectors', () => {
   it('falls back to a zero vector for leading null frames', () => {
     const rows = computeFeatureVectors(sequence([frame(0, null), frame(1, poseWithLeftElbowAngle(90))]))
     expect(rows[0][leftElbowIdx]).toBe(0)
+  })
+})
+
+describe('computeAngleRows', () => {
+  it('returns just the angle portion (first NUM_ANGLES columns), matching computeFeatureVectors', () => {
+    const seq = sequence([frame(0, poseWithLeftElbowAngle(90)), frame(1, poseWithLeftElbowAngle(120))])
+    const angleRows = computeAngleRows(seq)
+    const featureRows = computeFeatureVectors(seq)
+    expect(angleRows).toEqual(featureRows.map((row) => row.slice(0, NUM_ANGLES)))
   })
 })

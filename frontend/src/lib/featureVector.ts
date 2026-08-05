@@ -4,7 +4,13 @@ import type { PoseSequence } from './poseTypes'
 const NUM_ANGLES = JOINT_ANGLE_NAMES.length
 export const FEATURE_VECTOR_LENGTH = NUM_ANGLES * 3 // angles + velocity + acceleration
 
-function computeAngleRowsWithGapFill(sequence: PoseSequence): number[][] {
+/**
+ * Per-frame 8-angle vector across a whole sequence, with null-landmark gaps
+ * carried forward. Exported so checkpointFlags.ts (milestone 4) can reuse the
+ * exact same gap-filled angle data computeFeatureVectors uses internally,
+ * instead of duplicating this logic.
+ */
+export function computeAngleRows(sequence: PoseSequence): number[][] {
   // ponytail: holds last valid angle vector across null-landmark gaps instead of
   // interpolating — revisit if gaps are long/frequent in practice.
   let lastValid = new Array(NUM_ANGLES).fill(0)
@@ -33,7 +39,7 @@ function finiteDifference(rows: number[][], dtSec: number): number[][] {
  */
 export function computeFeatureVectors(sequence: PoseSequence): number[][] {
   const dtSec = 1 / sequence.targetFps
-  const angleRows = computeAngleRowsWithGapFill(sequence)
+  const angleRows = computeAngleRows(sequence)
   const velocityRows = finiteDifference(angleRows, dtSec)
   const accelerationRows = finiteDifference(velocityRows, dtSec)
   return angleRows.map((angles, i) => [...angles, ...velocityRows[i], ...accelerationRows[i]])
