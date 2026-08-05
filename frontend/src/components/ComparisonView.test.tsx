@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ComparisonView } from './ComparisonView'
 import type { CheckpointFlag } from '../lib/checkpointFlags'
 import type { PoseSequence } from '../lib/poseTypes'
@@ -38,6 +38,9 @@ function renderView(overrides: Partial<Parameters<typeof ComparisonView>[0]> = {
       referenceSequence={fakeSequence(3)}
       path={path}
       flags={flags}
+      referenceClipCount={1}
+      selectedClipIndex={0}
+      onSelectReferenceClip={vi.fn()}
       {...overrides}
     />
   )
@@ -71,5 +74,67 @@ describe('ComparisonView', () => {
     renderView({ path: [] })
     expect(screen.getByText('No aligned frames to compare.')).toBeInTheDocument()
     expect(screen.queryByTestId('comparison-scrubber')).not.toBeInTheDocument()
+  })
+
+  it('renders no cycling controls when there is only one reference clip', () => {
+    renderView()
+    expect(screen.queryByTestId('reference-clip-cycler')).not.toBeInTheDocument()
+  })
+
+  it('renders cycling controls with the current position when there are multiple reference clips', () => {
+    renderView({ referenceClipCount: 3, selectedClipIndex: 0 })
+    expect(screen.getByTestId('reference-clip-cycler')).toBeInTheDocument()
+    expect(screen.getByText('Clip 1 of 3')).toBeInTheDocument()
+  })
+
+  it('clicking Next calls onSelectReferenceClip with the next index', () => {
+    const onSelectReferenceClip = vi.fn()
+    renderView({ referenceClipCount: 3, selectedClipIndex: 0, onSelectReferenceClip })
+    fireEvent.click(screen.getByText('Next'))
+    expect(onSelectReferenceClip).toHaveBeenCalledWith(1)
+  })
+
+  it('clicking Prev at index 0 wraps around to call onSelectReferenceClip with the last index', () => {
+    const onSelectReferenceClip = vi.fn()
+    renderView({ referenceClipCount: 3, selectedClipIndex: 0, onSelectReferenceClip })
+    fireEvent.click(screen.getByText('Prev'))
+    expect(onSelectReferenceClip).toHaveBeenCalledWith(2)
+  })
+
+  it('resets the scrubber to pair 0 when the path prop changes (e.g. after switching reference clips)', () => {
+    const { rerender } = render(
+      <ComparisonView
+        userVideoUrl="blob:user"
+        userSequence={fakeSequence(3)}
+        referenceVideoUrl="blob:reference"
+        referenceSequence={fakeSequence(3)}
+        path={path}
+        flags={flags}
+        referenceClipCount={2}
+        selectedClipIndex={0}
+        onSelectReferenceClip={vi.fn()}
+      />
+    )
+    fireEvent.change(screen.getByTestId('comparison-scrubber'), { target: { value: '1' } })
+    expect(screen.getByTestId('comparison-scrubber')).toHaveValue('1')
+
+    const newPath: [number, number][] = [
+      [0, 0],
+      [1, 1],
+    ]
+    rerender(
+      <ComparisonView
+        userVideoUrl="blob:user"
+        userSequence={fakeSequence(3)}
+        referenceVideoUrl="blob:reference-2"
+        referenceSequence={fakeSequence(2)}
+        path={newPath}
+        flags={flags}
+        referenceClipCount={2}
+        selectedClipIndex={1}
+        onSelectReferenceClip={vi.fn()}
+      />
+    )
+    expect(screen.getByTestId('comparison-scrubber')).toHaveValue('0')
   })
 })
