@@ -7,6 +7,7 @@ import type { PoseSequence } from '../lib/poseTypes'
 const mockEstimateSequence = vi.fn()
 const mockComputeFeatureVectors = vi.fn()
 const mockDtw = vi.fn()
+const mockComputeCheckpointFlags = vi.fn()
 
 vi.mock('../hooks/usePoseEstimation', () => ({
   usePoseEstimation: () => ({ estimateSequence: mockEstimateSequence }),
@@ -16,6 +17,9 @@ vi.mock('../lib/featureVector', () => ({
 }))
 vi.mock('../lib/dtw', () => ({
   dtw: (...args: unknown[]) => mockDtw(...args),
+}))
+vi.mock('../lib/checkpointFlags', () => ({
+  computeCheckpointFlags: (...args: unknown[]) => mockComputeCheckpointFlags(...args),
 }))
 
 function fakeSequence(frameCount: number): PoseSequence {
@@ -34,6 +38,7 @@ beforeEach(() => {
   mockEstimateSequence.mockReset()
   mockComputeFeatureVectors.mockReset().mockReturnValue([[0]])
   mockDtw.mockReset().mockReturnValue({ path: [[0, 0]], cost: 0 })
+  mockComputeCheckpointFlags.mockReset().mockReturnValue([])
   URL.createObjectURL = vi.fn(() => 'blob:mock-url')
 })
 
@@ -82,5 +87,51 @@ describe('AlignmentToolApp', () => {
     expect(mockComputeFeatureVectors).toHaveBeenCalledTimes(2)
     const cells = screen.getAllByRole('cell').map((c) => c.textContent)
     expect(cells).toEqual(['0', '0', '1', '1', '2', '1'])
+  })
+
+  it('renders the checkpoint flags table once computeCheckpointFlags returns flags', async () => {
+    mockEstimateSequence.mockResolvedValueOnce(fakeSequence(10)).mockResolvedValueOnce(fakeSequence(12))
+    mockComputeCheckpointFlags.mockReturnValue([
+      { phase: 1, joint: 'leftElbow', userValue: 110, referenceValue: 90, delta: 20 },
+    ])
+
+    render(<AlignmentToolApp />)
+    await userEvent.upload(
+      screen.getByTestId('user-file-upload-input'),
+      new File(['dummy'], 'user.mp4', { type: 'video/mp4' })
+    )
+    await waitFor(() => expect(screen.getByTestId('reference-file-upload-input')).toBeEnabled())
+    await userEvent.upload(
+      screen.getByTestId('reference-file-upload-input'),
+      new File(['dummy'], 'reference.mp4', { type: 'video/mp4' })
+    )
+
+    await waitFor(() => expect(screen.getByText('leftElbow')).toBeInTheDocument())
+    expect(screen.getByText('110.0')).toBeInTheDocument()
+    expect(screen.getByText('90.0')).toBeInTheDocument()
+    expect(screen.getByText('20.0')).toBeInTheDocument()
+    expect(mockComputeCheckpointFlags).toHaveBeenCalledWith(
+      expect.objectContaining({ frameCount: 10 }),
+      expect.objectContaining({ frameCount: 12 }),
+      [[0, 0]]
+    )
+  })
+
+  it('shows "No checkpoint flags." once computeCheckpointFlags resolves with zero flags', async () => {
+    mockEstimateSequence.mockResolvedValueOnce(fakeSequence(10)).mockResolvedValueOnce(fakeSequence(12))
+    // mockComputeCheckpointFlags already defaults to [] via beforeEach
+
+    render(<AlignmentToolApp />)
+    await userEvent.upload(
+      screen.getByTestId('user-file-upload-input'),
+      new File(['dummy'], 'user.mp4', { type: 'video/mp4' })
+    )
+    await waitFor(() => expect(screen.getByTestId('reference-file-upload-input')).toBeEnabled())
+    await userEvent.upload(
+      screen.getByTestId('reference-file-upload-input'),
+      new File(['dummy'], 'reference.mp4', { type: 'video/mp4' })
+    )
+
+    await waitFor(() => expect(screen.getByText('No checkpoint flags.')).toBeInTheDocument())
   })
 })

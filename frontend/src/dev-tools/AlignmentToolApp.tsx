@@ -4,6 +4,7 @@ import { ProcessingProgress } from '../components/ProcessingProgress'
 import { usePoseEstimation } from '../hooks/usePoseEstimation'
 import { computeFeatureVectors } from '../lib/featureVector'
 import { dtw } from '../lib/dtw'
+import { computeCheckpointFlags, type CheckpointFlag } from '../lib/checkpointFlags'
 import type { PoseSequence } from '../lib/poseTypes'
 
 const TARGET_FPS = 30
@@ -68,6 +69,7 @@ export function AlignmentToolApp() {
   const [userSequence, setUserSequence] = useState<PoseSequence | null>(null)
   const [referenceSequence, setReferenceSequence] = useState<PoseSequence | null>(null)
   const [path, setPath] = useState<[number, number][] | null>(null)
+  const [flags, setFlags] = useState<CheckpointFlag[] | null>(null)
   const { estimateSequence } = usePoseEstimation()
 
   const handleUserVideoReady = (video: HTMLVideoElement) => {
@@ -88,7 +90,9 @@ export function AlignmentToolApp() {
     if (!userSequence || !referenceSequence) return
     const userVectors = computeFeatureVectors(userSequence)
     const referenceVectors = computeFeatureVectors(referenceSequence)
-    setPath(dtw(userVectors, referenceVectors).path)
+    const dtwPath = dtw(userVectors, referenceVectors).path
+    setPath(dtwPath)
+    setFlags(computeCheckpointFlags(userSequence, referenceSequence, dtwPath))
   }, [userSequence, referenceSequence])
 
   return (
@@ -137,6 +141,33 @@ export function AlignmentToolApp() {
           </tbody>
         </table>
       )}
+      {flags &&
+        (flags.length > 0 ? (
+          <table>
+            <thead>
+              <tr>
+                <th>Phase (ref frame)</th>
+                <th>Joint</th>
+                <th>Your angle</th>
+                <th>Reference angle</th>
+                <th>Delta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {flags.map((f, i) => (
+                <tr key={i}>
+                  <td>{f.phase}</td>
+                  <td>{f.joint}</td>
+                  <td>{f.userValue.toFixed(1)}</td>
+                  <td>{f.referenceValue.toFixed(1)}</td>
+                  <td>{f.delta.toFixed(1)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p>No checkpoint flags.</p>
+        ))}
     </div>
   )
 }
