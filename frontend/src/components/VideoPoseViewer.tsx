@@ -89,6 +89,7 @@ export function VideoPoseViewer({ videoUrl, poseSequence, onVideoElementReady }:
         src={videoUrl}
         style={{ width: '100%', display: 'block' }}
         onLoadedMetadata={drawCurrentFrame}
+        onError={() => console.error('Video failed to load — check the file is a supported mp4/mov codec.')}
       />
       <canvas ref={canvasRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }} />
       {poseSequence && (
