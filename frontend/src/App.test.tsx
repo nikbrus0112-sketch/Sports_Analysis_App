@@ -86,6 +86,18 @@ describe('App', () => {
       referenceSequence: fakeSequence,
       path: [[0, 0]],
       flags: [],
+      referenceClips: [
+        {
+          id: 'clip-1',
+          motion_type: 'freestyle',
+          video_url: '/reference-clips/freestyle/clip-1/video.mp4',
+          pose_data_url: '/reference-clips/freestyle/clip-1/pose.json',
+          camera_angle_note: '',
+          source_or_license_note: '',
+        },
+      ],
+      selectedClipIndex: 0,
+      selectReferenceClip: vi.fn(),
     })
     mockEstimateSequence.mockResolvedValue(fakeSequence)
     render(<App />)
@@ -96,5 +108,43 @@ describe('App', () => {
     expect(screen.getByTestId('user-video-pane')).toBeInTheDocument()
     expect(screen.getByTestId('reference-video-pane')).toBeInTheDocument()
     expect(screen.getByText('Try another video')).toBeInTheDocument()
+  })
+
+  it('shows cycling controls when the reference comparison has multiple clips', async () => {
+    mockUseReferenceComparison.mockReturnValue({
+      status: 'ready',
+      referenceVideoUrl: '/reference-clips/freestyle/clip-1/video.mp4',
+      referenceSequence: fakeSequence,
+      path: [[0, 0]],
+      flags: [],
+      referenceClips: [
+        {
+          id: 'clip-1',
+          motion_type: 'freestyle',
+          video_url: '/reference-clips/freestyle/clip-1/video.mp4',
+          pose_data_url: '/reference-clips/freestyle/clip-1/pose.json',
+          camera_angle_note: '',
+          source_or_license_note: '',
+        },
+        {
+          id: 'clip-2',
+          motion_type: 'freestyle',
+          video_url: '/reference-clips/freestyle/clip-2/video.mp4',
+          pose_data_url: '/reference-clips/freestyle/clip-2/pose.json',
+          camera_angle_note: '',
+          source_or_license_note: '',
+        },
+      ],
+      selectedClipIndex: 0,
+      selectReferenceClip: vi.fn(),
+    })
+    mockEstimateSequence.mockResolvedValue(fakeSequence)
+    render(<App />)
+    const file = new File(['dummy'], 'clip.mp4', { type: 'video/mp4' })
+    await userEvent.upload(screen.getByTestId('file-upload-input'), file)
+
+    await waitFor(() => expect(screen.getByText('Clip 1 of 2')).toBeInTheDocument())
+    expect(screen.getByText('Next')).toBeInTheDocument()
+    expect(screen.getByText('Prev')).toBeInTheDocument()
   })
 })
