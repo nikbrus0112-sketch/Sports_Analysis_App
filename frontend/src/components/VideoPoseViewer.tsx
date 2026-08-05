@@ -13,7 +13,7 @@ interface VideoPoseViewerProps {
 // PoseLandmarker.POSE_CONNECTIONS is Connection[] ({ start, end }), not [number, number][].
 // drawSkeleton expects tuples, so we adapt the shape here rather than in the (already
 // unit-tested) drawSkeleton helper.
-const POSE_CONNECTION_TUPLES: readonly (readonly [number, number])[] = PoseLandmarker.POSE_CONNECTIONS.map(
+export const POSE_CONNECTION_TUPLES: readonly (readonly [number, number])[] = PoseLandmarker.POSE_CONNECTIONS.map(
   (connection) => [connection.start, connection.end] as const
 )
 
