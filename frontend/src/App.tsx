@@ -1,8 +1,10 @@
 import { useCallback, useState } from 'react'
+import { ComparisonView } from './components/ComparisonView'
 import { FileUpload } from './components/FileUpload'
 import { ProcessingProgress } from './components/ProcessingProgress'
 import { VideoPoseViewer } from './components/VideoPoseViewer'
 import { usePoseEstimation } from './hooks/usePoseEstimation'
+import { useReferenceComparison } from './hooks/useReferenceComparison'
 import type { PoseSequence } from './lib/poseTypes'
 
 const TARGET_FPS = 30
@@ -15,6 +17,7 @@ export function App() {
   const [progress, setProgress] = useState({ current: 0, total: 0 })
   const [poseSequence, setPoseSequence] = useState<PoseSequence | null>(null)
   const { estimateSequence } = usePoseEstimation()
+  const comparison = useReferenceComparison(poseSequence)
 
   const handleFileSelected = (file: File) => {
     const url = URL.createObjectURL(file)
@@ -53,11 +56,31 @@ export function App() {
       {(state === 'processing' || state === 'ready') && videoUrl && (
         <>
           {state === 'processing' && <ProcessingProgress current={progress.current} total={progress.total} />}
-          <VideoPoseViewer
-            videoUrl={videoUrl}
-            poseSequence={poseSequence}
-            onVideoElementReady={handleVideoElementReady}
-          />
+          {state === 'ready' && comparison.status === 'ready' && poseSequence ? (
+            <ComparisonView
+              userVideoUrl={videoUrl}
+              userSequence={poseSequence}
+              referenceVideoUrl={comparison.referenceVideoUrl}
+              referenceSequence={comparison.referenceSequence}
+              path={comparison.path}
+              flags={comparison.flags}
+            />
+          ) : (
+            <>
+              {state === 'ready' && comparison.status === 'loading' && <p>Loading reference comparison…</p>}
+              {state === 'ready' && comparison.status === 'no-reference-available' && (
+                <p>No reference clip available yet for freestyle.</p>
+              )}
+              {state === 'ready' && comparison.status === 'error' && (
+                <p>Something went wrong loading the reference comparison.</p>
+              )}
+              <VideoPoseViewer
+                videoUrl={videoUrl}
+                poseSequence={poseSequence}
+                onVideoElementReady={handleVideoElementReady}
+              />
+            </>
+          )}
           {state === 'ready' && <button onClick={handleReset}>Try another video</button>}
         </>
       )}
