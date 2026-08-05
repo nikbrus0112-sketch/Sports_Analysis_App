@@ -40,8 +40,12 @@ export function usePoseEstimation() {
       delegateRef.current = 'GPU'
     } catch (err) {
       console.warn('GPU delegate init failed, falling back to CPU', err)
-      landmarkerRef.current = await createPoseLandmarker('CPU')
-      delegateRef.current = 'CPU'
+      try {
+        landmarkerRef.current = await createPoseLandmarker('CPU')
+        delegateRef.current = 'CPU'
+      } catch (cpuErr) {
+        throw new Error(`Failed to initialize MediaPipe PoseLandmarker on both GPU and CPU: ${String(cpuErr)}`)
+      }
     }
     console.info(`PoseLandmarker initialized with delegate=${delegateRef.current}`)
     return landmarkerRef.current
