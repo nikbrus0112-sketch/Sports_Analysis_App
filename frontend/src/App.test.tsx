@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
+import { MOTION_TYPES } from './lib/motionTypes'
 import type { PoseSequence } from './lib/poseTypes'
 
 const mockEstimateSequence = vi.fn()
@@ -74,7 +75,7 @@ describe('App', () => {
     const file = new File(['dummy'], 'clip.mp4', { type: 'video/mp4' })
     await userEvent.upload(screen.getByTestId('file-upload-input'), file)
 
-    await waitFor(() => expect(screen.getByText('No reference clip available yet for freestyle.')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('No reference clip available yet for Freestyle.')).toBeInTheDocument())
     expect(screen.getByTestId('scrubber')).toBeInTheDocument() // VideoPoseViewer's own scrubber
     expect(screen.getByText('Try another video')).toBeInTheDocument()
   })
@@ -146,5 +147,27 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByText('Clip 1 of 2')).toBeInTheDocument())
     expect(screen.getByText('Next')).toBeInTheDocument()
     expect(screen.getByText('Prev')).toBeInTheDocument()
+  })
+
+  it('shows a motion picker on the idle screen with both options, defaulting to Freestyle', () => {
+    render(<App />)
+    const select = screen.getByTestId('motion-type-select') as HTMLSelectElement
+    expect(select).toBeInTheDocument()
+    for (const { label } of MOTION_TYPES) {
+      expect(screen.getByRole('option', { name: label })).toBeInTheDocument()
+    }
+    expect(select.value).toBe('freestyle')
+  })
+
+  it('passes the selected motion type through to useReferenceComparison and shows its label in the no-reference message', async () => {
+    mockEstimateSequence.mockResolvedValue(fakeSequence)
+    render(<App />)
+    await userEvent.selectOptions(screen.getByTestId('motion-type-select'), 'butterfly')
+
+    const file = new File(['dummy'], 'clip.mp4', { type: 'video/mp4' })
+    await userEvent.upload(screen.getByTestId('file-upload-input'), file)
+
+    await waitFor(() => expect(screen.getByText('No reference clip available yet for Butterfly.')).toBeInTheDocument())
+    expect(mockUseReferenceComparison).toHaveBeenLastCalledWith(fakeSequence, 'butterfly')
   })
 })

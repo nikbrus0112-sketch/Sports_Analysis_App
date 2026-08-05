@@ -5,6 +5,7 @@ import { ProcessingProgress } from './components/ProcessingProgress'
 import { VideoPoseViewer } from './components/VideoPoseViewer'
 import { usePoseEstimation } from './hooks/usePoseEstimation'
 import { useReferenceComparison } from './hooks/useReferenceComparison'
+import { DEFAULT_MOTION_TYPE, MOTION_TYPES } from './lib/motionTypes'
 import type { PoseSequence } from './lib/poseTypes'
 
 const TARGET_FPS = 30
@@ -16,8 +17,9 @@ export function App() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
   const [poseSequence, setPoseSequence] = useState<PoseSequence | null>(null)
+  const [motionType, setMotionType] = useState(DEFAULT_MOTION_TYPE)
   const { estimateSequence } = usePoseEstimation()
-  const comparison = useReferenceComparison(poseSequence)
+  const comparison = useReferenceComparison(poseSequence, motionType)
 
   const handleFileSelected = (file: File) => {
     const url = URL.createObjectURL(file)
@@ -52,7 +54,24 @@ export function App() {
 
   return (
     <div>
-      {state === 'idle' && <FileUpload onFileSelected={handleFileSelected} />}
+      {state === 'idle' && (
+        <>
+          <label htmlFor="motion-type-select">Motion</label>
+          <select
+            id="motion-type-select"
+            data-testid="motion-type-select"
+            value={motionType}
+            onChange={(e) => setMotionType(e.target.value)}
+          >
+            {MOTION_TYPES.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <FileUpload onFileSelected={handleFileSelected} />
+        </>
+      )}
       {(state === 'processing' || state === 'ready') && videoUrl && (
         <>
           {state === 'processing' && <ProcessingProgress current={progress.current} total={progress.total} />}
@@ -72,7 +91,10 @@ export function App() {
             <>
               {state === 'ready' && comparison.status === 'loading' && <p>Loading reference comparison…</p>}
               {state === 'ready' && comparison.status === 'no-reference-available' && (
-                <p>No reference clip available yet for freestyle.</p>
+                <p>
+                  No reference clip available yet for{' '}
+                  {MOTION_TYPES.find((m) => m.value === motionType)?.label ?? motionType}.
+                </p>
               )}
               {state === 'ready' && comparison.status === 'error' && (
                 <p>Something went wrong loading the reference comparison.</p>
