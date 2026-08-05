@@ -20,6 +20,9 @@ interface ComparisonViewProps {
   referenceSequence: PoseSequence
   path: [number, number][]
   flags: CheckpointFlag[]
+  referenceClipCount: number
+  selectedClipIndex: number
+  onSelectReferenceClip: (index: number) => void
 }
 
 export function ComparisonView({
@@ -29,6 +32,9 @@ export function ComparisonView({
   referenceSequence,
   path,
   flags,
+  referenceClipCount,
+  selectedClipIndex,
+  onSelectReferenceClip,
 }: ComparisonViewProps) {
   const userVideoRef = useRef<HTMLVideoElement>(null)
   const referenceVideoRef = useRef<HTMLVideoElement>(null)
@@ -38,6 +44,14 @@ export function ComparisonView({
   const [pairIndex, setPairIndex] = useState(0)
 
   const [userFrameIdx, referenceFrameIdx] = path[pairIndex] ?? [0, 0]
+
+  // A clip switch that hits the pose-data cache (see useReferenceComparison)
+  // updates props without unmounting this component — reset the scrubber so
+  // it doesn't keep pointing at a pair index that means something different
+  // (or doesn't exist) in the newly selected clip's path.
+  useEffect(() => {
+    setPairIndex(0)
+  }, [path])
 
   useEffect(() => {
     const userCanvas = userCanvasRef.current
@@ -129,6 +143,20 @@ export function ComparisonView({
           />
         </div>
       </div>
+
+      {referenceClipCount >= 2 && (
+        <div data-testid="reference-clip-cycler">
+          <button
+            onClick={() => onSelectReferenceClip((selectedClipIndex - 1 + referenceClipCount) % referenceClipCount)}
+          >
+            Prev
+          </button>
+          <span>
+            Clip {selectedClipIndex + 1} of {referenceClipCount}
+          </span>
+          <button onClick={() => onSelectReferenceClip((selectedClipIndex + 1) % referenceClipCount)}>Next</button>
+        </div>
+      )}
 
       {path.length === 0 ? (
         <p>No aligned frames to compare.</p>
