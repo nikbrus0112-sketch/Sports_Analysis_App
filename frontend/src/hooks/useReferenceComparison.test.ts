@@ -56,7 +56,7 @@ beforeEach(() => {
 
 describe('useReferenceComparison', () => {
   it('stays idle when userSequence is null', () => {
-    const { result } = renderHook(() => useReferenceComparison(null))
+    const { result } = renderHook(() => useReferenceComparison(null, 'freestyle'))
     expect(result.current.status).toBe('idle')
     expect(mockFetchReferenceClips).not.toHaveBeenCalled()
   })
@@ -64,7 +64,7 @@ describe('useReferenceComparison', () => {
   it('resolves to no-reference-available when the library has zero clips', async () => {
     mockFetchReferenceClips.mockResolvedValue([])
     const userSequence = fakeSequence(10)
-    const { result } = renderHook(() => useReferenceComparison(userSequence))
+    const { result } = renderHook(() => useReferenceComparison(userSequence, 'freestyle'))
     await waitFor(() => expect(result.current.status).toBe('no-reference-available'))
   })
 
@@ -80,7 +80,7 @@ describe('useReferenceComparison', () => {
       },
     ])
     const userSequence = fakeSequence(10)
-    const { result } = renderHook(() => useReferenceComparison(userSequence))
+    const { result } = renderHook(() => useReferenceComparison(userSequence, 'freestyle'))
     await waitFor(() => expect(result.current.status).toBe('no-reference-available'))
     expect(mockFetchPoseSequence).not.toHaveBeenCalled()
   })
@@ -99,7 +99,7 @@ describe('useReferenceComparison', () => {
     mockComputeCheckpointFlags.mockReturnValue([{ phase: 1, joint: 'leftElbow', userValue: 1, referenceValue: 2, delta: -1 }])
 
     const userSequence = fakeSequence(10)
-    const { result } = renderHook(() => useReferenceComparison(userSequence))
+    const { result } = renderHook(() => useReferenceComparison(userSequence, 'freestyle'))
     await waitFor(() => expect(result.current.status).toBe('ready'))
 
     if (result.current.status !== 'ready') throw new Error('expected ready')
@@ -117,7 +117,7 @@ describe('useReferenceComparison', () => {
   it('resolves to error when fetchReferenceClips rejects', async () => {
     mockFetchReferenceClips.mockRejectedValue(new Error('network down'))
     const userSequence = fakeSequence(10)
-    const { result } = renderHook(() => useReferenceComparison(userSequence))
+    const { result } = renderHook(() => useReferenceComparison(userSequence, 'freestyle'))
     await waitFor(() => expect(result.current.status).toBe('error'))
   })
 
@@ -126,7 +126,7 @@ describe('useReferenceComparison', () => {
     mockFetchPoseSequence.mockResolvedValue(fakeSequence(10))
 
     const userSequence = fakeSequence(10)
-    const { result } = renderHook(() => useReferenceComparison(userSequence))
+    const { result } = renderHook(() => useReferenceComparison(userSequence, 'freestyle'))
     await waitFor(() => expect(result.current.status).toBe('ready'))
 
     if (result.current.status !== 'ready') throw new Error('expected ready')
@@ -155,7 +155,7 @@ describe('useReferenceComparison', () => {
       .mockReturnValueOnce([{ phase: 1, joint: 'leftElbow', userValue: 1, referenceValue: 2, delta: -1 }])
 
     const userSequence = fakeSequence(10)
-    const { result } = renderHook(() => useReferenceComparison(userSequence))
+    const { result } = renderHook(() => useReferenceComparison(userSequence, 'freestyle'))
     await waitFor(() => expect(result.current.status).toBe('ready'))
     expect(mockFetchPoseSequence).toHaveBeenCalledTimes(1)
 
@@ -184,7 +184,7 @@ describe('useReferenceComparison', () => {
     )
 
     const userSequence = fakeSequence(10)
-    const { result } = renderHook(() => useReferenceComparison(userSequence))
+    const { result } = renderHook(() => useReferenceComparison(userSequence, 'freestyle'))
     await waitFor(() => expect(result.current.status).toBe('ready'))
 
     act(() => {
@@ -213,7 +213,7 @@ describe('useReferenceComparison', () => {
     mockFetchPoseSequence.mockResolvedValue(fakeSequence(10))
 
     const userSequence = fakeSequence(10)
-    const { result } = renderHook(() => useReferenceComparison(userSequence))
+    const { result } = renderHook(() => useReferenceComparison(userSequence, 'freestyle'))
     await waitFor(() => expect(result.current.status).toBe('ready'))
 
     act(() => {
@@ -231,5 +231,26 @@ describe('useReferenceComparison', () => {
       if (result.current.status !== 'ready') throw new Error('expected ready')
       expect(result.current.selectedClipIndex).toBe(3)
     })
+  })
+
+  it("refetches with the new motion type and resets stale state when motionType changes, rather than keeping the old motion's clips", async () => {
+    mockFetchReferenceClips
+      .mockResolvedValueOnce([clipFixture('clip-1')]) // freestyle
+      .mockResolvedValueOnce([]) // butterfly — none yet
+    mockFetchPoseSequence.mockResolvedValue(fakeSequence(10))
+
+    const userSequence = fakeSequence(10)
+    const { result, rerender } = renderHook(
+      ({ motionType }: { motionType: string }) => useReferenceComparison(userSequence, motionType),
+      { initialProps: { motionType: 'freestyle' } }
+    )
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(mockFetchReferenceClips).toHaveBeenNthCalledWith(1, 'freestyle')
+
+    rerender({ motionType: 'butterfly' })
+    expect(result.current.status).toBe('loading') // stale freestyle 'ready' result is not reused
+    await waitFor(() => expect(result.current.status).toBe('no-reference-available'))
+    expect(mockFetchReferenceClips).toHaveBeenNthCalledWith(2, 'butterfly')
+    expect(mockFetchReferenceClips).toHaveBeenCalledTimes(2)
   })
 })

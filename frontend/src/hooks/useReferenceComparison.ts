@@ -5,10 +5,6 @@ import { dtw } from '../lib/dtw'
 import { computeFeatureVectors } from '../lib/featureVector'
 import type { PoseSequence } from '../lib/poseTypes'
 
-// Only motion in the reference library so far — see milestone 5's plan for
-// the full rationale. A motion picker is future work (build-order step 7).
-const MOTION_TYPE = 'freestyle'
-
 interface Alignment {
   referenceVideoUrl: string
   referenceSequence: PoseSequence
@@ -41,24 +37,25 @@ function wrapIndex(index: number, length: number): number {
 }
 
 /**
- * Fetches the full reference-clip list for the (currently hardcoded) motion
- * type, then fetches + aligns whichever clip is currently selected.
- * selectReferenceClip lets a caller cycle between clips once the library has
- * more than one (spec build-order step 6 / V1 item 8). Per-clip pose data is
- * cached (by clip id) so re-selecting an already-viewed clip skips the
- * network fetch — DTW/checkpoint-flags are still recomputed every time
- * (cheap, pure, deterministic).
+ * Fetches the full reference-clip list for the given motion type, then
+ * fetches + aligns whichever clip is currently selected. selectReferenceClip
+ * lets a caller cycle between clips once the library has more than one
+ * (spec build-order step 6 / V1 item 8). Per-clip pose data is cached (by
+ * clip id) so re-selecting an already-viewed clip skips the network fetch —
+ * DTW/checkpoint-flags are still recomputed every time (cheap, pure,
+ * deterministic).
  */
-export function useReferenceComparison(userSequence: PoseSequence | null): ComparisonResult {
+export function useReferenceComparison(userSequence: PoseSequence | null, motionType: string): ComparisonResult {
   const [phase, setPhase] = useState<'idle' | 'loading' | 'no-reference-available' | 'error' | 'ready'>('idle')
   const [referenceClips, setReferenceClips] = useState<ReferenceClip[]>([])
   const [selectedClipIndex, setSelectedClipIndex] = useState(0)
   const [alignment, setAlignment] = useState<Alignment | null>(null)
   const poseCache = useRef(new Map<string, PoseSequence>())
 
-  // Effect 1: fetch the clip list whenever the user's own sequence changes —
-  // same trigger point as before. Resets selection back to the first clip,
-  // since a new user clip starting fresh should default there.
+  // Effect 1: fetch the clip list whenever the user's own sequence or the
+  // selected motion type changes. A motion change resets state and refetches
+  // exactly like a new user clip does — no stale clips from the old motion
+  // are ever shown under the new selection.
   useEffect(() => {
     if (!userSequence) {
       setPhase('idle')
@@ -74,7 +71,7 @@ export function useReferenceComparison(userSequence: PoseSequence | null): Compa
     setSelectedClipIndex(0)
     setAlignment(null)
 
-    fetchReferenceClips(MOTION_TYPE)
+    fetchReferenceClips(motionType)
       .then((clips) => {
         if (cancelled) return
         const validClips = clips.filter((c) => c.video_url && c.pose_data_url)
@@ -92,7 +89,7 @@ export function useReferenceComparison(userSequence: PoseSequence | null): Compa
     return () => {
       cancelled = true
     }
-  }, [userSequence])
+  }, [userSequence, motionType])
 
   // Effect 2: (re)compute alignment for whichever clip is currently selected.
   useEffect(() => {
