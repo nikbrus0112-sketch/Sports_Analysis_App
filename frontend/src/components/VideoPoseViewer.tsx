@@ -83,18 +83,26 @@ export function VideoPoseViewer({ videoUrl, poseSequence, onVideoElementReady }:
   }
 
   return (
-    <div style={{ position: 'relative', width: poseSequence?.videoWidth ?? '100%', maxWidth: '100%' }}>
+    <div
+      className="relative mx-auto max-w-full overflow-hidden rounded-xl border border-border bg-card"
+      style={{ width: poseSequence?.videoWidth ?? '100%' }}
+    >
       <video
         ref={videoRef}
         src={videoUrl}
-        style={{ width: '100%', display: 'block' }}
+        className="block w-full"
         onLoadedMetadata={drawCurrentFrame}
         onError={() => console.error('Video failed to load — check the file is a supported mp4/mov codec.')}
       />
-      <canvas ref={canvasRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }} />
+      <canvas ref={canvasRef} className="pointer-events-none absolute left-0 top-0 h-full w-full" />
       {poseSequence && (
-        <div>
-          <button onClick={handlePlayPause}>{isPlaying ? 'Pause' : 'Play'}</button>
+        <div className="flex items-center gap-3 border-t border-border p-3">
+          <button
+            onClick={handlePlayPause}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-primary-emphasis px-4 text-sm font-medium text-white transition-colors hover:brightness-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            {isPlaying ? 'Pause' : 'Play'}
+          </button>
           <input
             type="range"
             min={0}
@@ -102,6 +110,7 @@ export function VideoPoseViewer({ videoUrl, poseSequence, onVideoElementReady }:
             step={1 / poseSequence.targetFps}
             onChange={handleSeek}
             data-testid="scrubber"
+            className="h-11 flex-1 accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           />
         </div>
       )}
