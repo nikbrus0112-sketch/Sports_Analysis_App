@@ -130,36 +130,44 @@ export function ComparisonView({
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 16 }}>
-        <div style={{ position: 'relative', flex: 1 }} data-testid="user-video-pane">
-          <video ref={userVideoRef} src={userVideoUrl} style={{ width: '100%', display: 'block' }} />
-          <canvas ref={userCanvasRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }} />
+      <div className="flex flex-col gap-4 md:flex-row">
+        <div className="relative flex-1 overflow-hidden rounded-xl border border-border bg-card" data-testid="user-video-pane">
+          <video ref={userVideoRef} src={userVideoUrl} className="block w-full" />
+          <canvas ref={userCanvasRef} className="pointer-events-none absolute left-0 top-0 h-full w-full" />
         </div>
-        <div style={{ position: 'relative', flex: 1 }} data-testid="reference-video-pane">
-          <video ref={referenceVideoRef} src={referenceVideoUrl} style={{ width: '100%', display: 'block' }} />
-          <canvas
-            ref={referenceCanvasRef}
-            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-          />
+        <div
+          className="relative flex-1 overflow-hidden rounded-xl border border-border bg-card"
+          data-testid="reference-video-pane"
+        >
+          <video ref={referenceVideoRef} src={referenceVideoUrl} className="block w-full" />
+          <canvas ref={referenceCanvasRef} className="pointer-events-none absolute left-0 top-0 h-full w-full" />
         </div>
       </div>
 
       {referenceClipCount >= 2 && (
-        <div data-testid="reference-clip-cycler">
+        <div className="mt-4 flex items-center justify-center gap-4" data-testid="reference-clip-cycler">
           <button
             onClick={() => onSelectReferenceClip((selectedClipIndex - 1 + referenceClipCount) % referenceClipCount)}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Prev
           </button>
-          <span>
+          <span className="font-mono text-sm tabular-nums text-muted-foreground">
             Clip {selectedClipIndex + 1} of {referenceClipCount}
           </span>
-          <button onClick={() => onSelectReferenceClip((selectedClipIndex + 1) % referenceClipCount)}>Next</button>
+          <button
+            onClick={() => onSelectReferenceClip((selectedClipIndex + 1) % referenceClipCount)}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            Next
+          </button>
         </div>
       )}
 
       {path.length === 0 ? (
-        <p>No aligned frames to compare.</p>
+        <p className="mt-4 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          No aligned frames to compare.
+        </p>
       ) : (
         <input
           type="range"
@@ -169,36 +177,47 @@ export function ComparisonView({
           value={pairIndex}
           onChange={(e) => setPairIndex(Number(e.target.value))}
           data-testid="comparison-scrubber"
+          className="mt-4 h-11 w-full accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         />
       )}
 
-      <h2>In-depth analysis</h2>
-      <canvas ref={overlayCanvasRef} data-testid="overlay-canvas" />
+      <h2 className="mb-3 mt-8 text-lg font-semibold text-foreground">In-depth analysis</h2>
+      <div className="mx-auto aspect-square w-full max-w-[400px] overflow-hidden rounded-xl border border-border bg-card">
+        <canvas ref={overlayCanvasRef} data-testid="overlay-canvas" className="block h-full w-full" />
+      </div>
 
-      <h2>Checkpoint flags at this frame</h2>
+      <h2 className="mb-3 mt-8 text-lg font-semibold text-foreground">Checkpoint flags at this frame</h2>
       {currentFlags.length > 0 ? (
-        <table>
-          <thead>
-            <tr>
-              <th>Joint</th>
-              <th>Your angle</th>
-              <th>Reference angle</th>
-              <th>Delta</th>
-            </tr>
-          </thead>
-          <tbody>
-            {currentFlags.map((f, i) => (
-              <tr key={i}>
-                <td>{f.joint}</td>
-                <td>{f.userValue.toFixed(1)}</td>
-                <td>{f.referenceValue.toFixed(1)}</td>
-                <td>{f.delta.toFixed(1)}</td>
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[480px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border bg-card text-left text-muted-foreground">
+                <th className="px-4 py-2 font-medium">Joint</th>
+                <th className="px-4 py-2 text-right font-medium">Your angle</th>
+                <th className="px-4 py-2 text-right font-medium">Reference angle</th>
+                <th className="px-4 py-2 text-right font-medium">Delta</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {currentFlags.map((f, i) => (
+                <tr key={i} className="border-b border-border last:border-0">
+                  <td className="px-4 py-2 text-foreground">{f.joint}</td>
+                  <td className="px-4 py-2 text-right font-mono tabular-nums text-foreground">
+                    {f.userValue.toFixed(1)}
+                  </td>
+                  <td className="px-4 py-2 text-right font-mono tabular-nums text-foreground">
+                    {f.referenceValue.toFixed(1)}
+                  </td>
+                  <td className="px-4 py-2 text-right font-mono tabular-nums text-accent">{f.delta.toFixed(1)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
-        <p>No flags at this frame.</p>
+        <p className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          No flags at this frame.
+        </p>
       )}
     </div>
   )
