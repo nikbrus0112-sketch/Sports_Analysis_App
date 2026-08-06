@@ -21,3 +21,27 @@ export function seekTo(video: HTMLVideoElement, timeSec: number): Promise<void> 
     video.currentTime = timeSec
   })
 }
+
+const HAVE_METADATA_READY_STATE = 1
+
+export function waitForMetadata(video: HTMLVideoElement): Promise<void> {
+  if (video.readyState >= HAVE_METADATA_READY_STATE) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      video.removeEventListener('loadedmetadata', onLoadedMetadata)
+      video.removeEventListener('error', onError)
+    }
+    const onLoadedMetadata = () => {
+      cleanup()
+      resolve()
+    }
+    const onError = () => {
+      cleanup()
+      reject(new Error('Video failed to load before metadata was available'))
+    }
+    video.addEventListener('loadedmetadata', onLoadedMetadata)
+    video.addEventListener('error', onError)
+  })
+}

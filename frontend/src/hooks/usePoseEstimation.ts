@@ -1,6 +1,6 @@
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision'
 import { useCallback, useEffect, useRef } from 'react'
-import { computeFrameCount, frameTimestampMs, seekTo } from '../lib/frameExtraction'
+import { computeFrameCount, frameTimestampMs, seekTo, waitForMetadata } from '../lib/frameExtraction'
 import { smoothSequence } from '../lib/oneEuroFilter'
 import type { PoseFrame, PoseSequence } from '../lib/poseTypes'
 
@@ -55,6 +55,8 @@ export function usePoseEstimation() {
     async (video: HTMLVideoElement, options: EstimateSequenceOptions): Promise<PoseSequence> => {
       const { targetFps, onProgress } = options
       const landmarker = await ensureLandmarker()
+
+      await waitForMetadata(video)
 
       const durationSec = video.duration
       const frameCount = computeFrameCount(durationSec, targetFps)
