@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CheckpointFlag } from '../lib/checkpointFlags'
 import { drawSkeleton } from '../lib/drawSkeleton'
 import { frameTimestampMs, seekTo } from '../lib/frameExtraction'
 import { normalizeSkeletonForOverlay } from '../lib/normalizeSkeleton'
 import type { PoseSequence } from '../lib/poseTypes'
+import { boxCenter, computeSubjectBox, computeSubjectCenters, cropStyle, positionBoxAt, unifyAspectRatio } from '../lib/subjectCrop'
 import { POSE_CONNECTION_TUPLES } from './VideoPoseViewer'
 
 // Overlay canvas is a fixed square, independent of either clip's native video
@@ -12,6 +13,26 @@ import { POSE_CONNECTION_TUPLES } from './VideoPoseViewer'
 const OVERLAY_CANVAS_SIZE = 400
 const USER_COLOR = '#3B82F6' // blue
 const REFERENCE_COLOR = '#F97316' // orange
+
+// ponytail: fixed-rate setInterval rather than rAF+elapsed-time accumulation —
+// good enough for stepping through DTW pairs; revisit if visible jitter matters.
+const PLAYBACK_INTERVAL_MS = 1000 / 30
+
+// ponytail: fixed pixel budget, not viewport-relative — simple, predictable,
+// avoids a ResizeObserver dependency. Revisit if it should scale with the
+// viewport instead. Prevents a narrow/tall crop aspect ratio from producing
+// a pane taller than the browser window (confirmed live: 1018px pane in an
+// 811px viewport before this cap).
+const MAX_PANE_HEIGHT_PX = 500
+
+const TOGGLE_BUTTON_BASE =
+  'inline-flex min-h-11 items-center justify-center rounded-lg border px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+
+function toggleButtonClass(active: boolean): string {
+  return active
+    ? `${TOGGLE_BUTTON_BASE} border-primary bg-primary/10 text-primary`
+    : `${TOGGLE_BUTTON_BASE} border-border bg-card text-foreground hover:bg-primary/10`
+}
 
 interface ComparisonViewProps {
   userVideoUrl: string
@@ -42,8 +63,36 @@ export function ComparisonView({
   const referenceCanvasRef = useRef<HTMLCanvasElement>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
   const [pairIndex, setPairIndex] = useState(0)
+  const [showSkeleton, setShowSkeleton] = useState(true)
+  const [overlapMode, setOverlapMode] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
 
   const [userFrameIdx, referenceFrameIdx] = path[pairIndex] ?? [0, 0]
+
+  const [userBox, referenceBox] = useMemo(() => {
+    const rawUser = computeSubjectBox(userSequence)
+    const rawReference = computeSubjectBox(referenceSequence)
+    return unifyAspectRatio(
+      rawUser,
+      userSequence.videoWidth,
+      userSequence.videoHeight,
+      rawReference,
+      referenceSequence.videoWidth,
+      referenceSequence.videoHeight
+    )
+  }, [userSequence, referenceSequence])
+  const paneAspectRatio = `${userBox.width} / ${userBox.height}`
+  const paneMaxWidthPx = MAX_PANE_HEIGHT_PX * (userBox.width / userBox.height)
+
+  // Per-frame subject-position trajectory (size/aspect ratio stay fixed on
+  // userBox/referenceBox above — only the crop's pan position is dynamic).
+  // Depends on the box too since it's the fallback center for leading gaps,
+  // and can itself shift when the other clip changes (aspect-ratio unification).
+  const userCenters = useMemo(() => computeSubjectCenters(userSequence, boxCenter(userBox)), [userSequence, userBox])
+  const referenceCenters = useMemo(
+    () => computeSubjectCenters(referenceSequence, boxCenter(referenceBox)),
+    [referenceSequence, referenceBox]
+  )
 
   // A clip switch that hits the pose-data cache (see useReferenceComparison)
   // updates props without unmounting this component — reset the scrubber so
@@ -51,6 +100,7 @@ export function ComparisonView({
   // (or doesn't exist) in the newly selected clip's path.
   useEffect(() => {
     setPairIndex(0)
+    setIsPlaying(false)
   }, [path])
 
   useEffect(() => {
@@ -81,8 +131,17 @@ export function ComparisonView({
       const ctx = userCanvas.getContext('2d')
       if (ctx) {
         ctx.clearRect(0, 0, userCanvas.width, userCanvas.height)
-        const frame = userSequence.frames[userFrameIdx]
-        drawSkeleton(ctx, frame?.landmarksSmoothed ?? null, userCanvas.width, userCanvas.height, POSE_CONNECTION_TUPLES)
+        if (showSkeleton) {
+          const frame = userSequence.frames[userFrameIdx]
+          drawSkeleton(
+            ctx,
+            frame?.landmarksSmoothed ?? null,
+            userCanvas.width,
+            userCanvas.height,
+            POSE_CONNECTION_TUPLES,
+            overlapMode ? { color: USER_COLOR } : undefined
+          )
+        }
       }
     }
 
@@ -91,14 +150,17 @@ export function ComparisonView({
       const ctx = referenceCanvas.getContext('2d')
       if (ctx) {
         ctx.clearRect(0, 0, referenceCanvas.width, referenceCanvas.height)
-        const frame = referenceSequence.frames[referenceFrameIdx]
-        drawSkeleton(
-          ctx,
-          frame?.landmarksSmoothed ?? null,
-          referenceCanvas.width,
-          referenceCanvas.height,
-          POSE_CONNECTION_TUPLES
-        )
+        if (showSkeleton) {
+          const frame = referenceSequence.frames[referenceFrameIdx]
+          drawSkeleton(
+            ctx,
+            frame?.landmarksSmoothed ?? null,
+            referenceCanvas.width,
+            referenceCanvas.height,
+            POSE_CONNECTION_TUPLES,
+            overlapMode ? { color: REFERENCE_COLOR } : undefined
+          )
+        }
       }
     }
 
@@ -124,23 +186,100 @@ export function ComparisonView({
     if (userVideo) seekTo(userVideo, frameTimestampMs(userFrameIdx, userSequence.targetFps) / 1000)
     const referenceVideo = referenceVideoRef.current
     if (referenceVideo) seekTo(referenceVideo, frameTimestampMs(referenceFrameIdx, referenceSequence.targetFps) / 1000)
-  }, [userFrameIdx, referenceFrameIdx, userSequence, referenceSequence])
+  }, [userFrameIdx, referenceFrameIdx, userSequence, referenceSequence, showSkeleton, overlapMode])
+
+  useEffect(() => {
+    if (!isPlaying) return
+    const id = window.setInterval(() => {
+      setPairIndex((i) => {
+        if (i >= path.length - 1) {
+          setIsPlaying(false)
+          return i
+        }
+        return i + 1
+      })
+    }, PLAYBACK_INTERVAL_MS)
+    return () => window.clearInterval(id)
+  }, [isPlaying, path])
+
+  const handlePlayPause = () => {
+    if (isPlaying) {
+      setIsPlaying(false)
+      return
+    }
+    if (pairIndex >= path.length - 1) setPairIndex(0)
+    setIsPlaying(true)
+  }
+
+  const handleScrub = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setIsPlaying(false)
+    setPairIndex(Number(e.target.value))
+  }
 
   const currentFlags = flags.filter((f) => f.phase === referenceFrameIdx)
 
+  const userPositionedBox = positionBoxAt(
+    userBox,
+    userCenters[userFrameIdx] ?? boxCenter(userBox),
+    userSequence.videoWidth,
+    userSequence.videoHeight
+  )
+  const referencePositionedBox = positionBoxAt(
+    referenceBox,
+    referenceCenters[referenceFrameIdx] ?? boxCenter(referenceBox),
+    referenceSequence.videoWidth,
+    referenceSequence.videoHeight
+  )
+  const userCropStyle = cropStyle(userPositionedBox, userSequence.videoWidth, userSequence.videoHeight)
+  const referenceCropStyle = cropStyle(referencePositionedBox, referenceSequence.videoWidth, referenceSequence.videoHeight)
+  const paneSizeStyle = { aspectRatio: paneAspectRatio, maxWidth: `${paneMaxWidthPx}px` }
+  // Overlap mode: the WRAPPER becomes the single sized+chromed box (same
+  // aspect-ratio+max-width approach already proven for the side-by-side
+  // panes below); the two inner divs just absolutely fill it. Deliberately
+  // not CSS grid stacking here — grid's implicit auto-sized track, combined
+  // with content-less (absolutely positioned video/canvas) children, hits a
+  // circular auto-sizing case that collapses to ~0px (confirmed live).
+  const paneWrapperClass = overlapMode
+    ? 'relative mx-auto overflow-hidden rounded-xl border border-border bg-card'
+    : 'flex flex-col gap-4 justify-center md:flex-row'
+  const paneWrapperStyle = overlapMode ? paneSizeStyle : undefined
+  const paneClass = overlapMode ? 'absolute inset-0' : 'relative flex-1 overflow-hidden rounded-xl border border-border bg-card'
+  const paneStyle = overlapMode ? undefined : paneSizeStyle
+
   return (
     <div>
-      <div className="flex flex-col gap-4 md:flex-row">
-        <div className="relative flex-1 overflow-hidden rounded-xl border border-border bg-card" data-testid="user-video-pane">
-          <video ref={userVideoRef} src={userVideoUrl} className="block w-full" />
-          <canvas ref={userCanvasRef} className="pointer-events-none absolute left-0 top-0 h-full w-full" />
-        </div>
-        <div
-          className="relative flex-1 overflow-hidden rounded-xl border border-border bg-card"
-          data-testid="reference-video-pane"
+      <div
+        className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4"
+        data-testid="comparison-toolbar"
+      >
+        <button
+          onClick={handlePlayPause}
+          disabled={path.length === 0}
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-primary-emphasis px-4 text-sm font-medium text-white transition-colors hover:brightness-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <video ref={referenceVideoRef} src={referenceVideoUrl} className="block w-full" />
-          <canvas ref={referenceCanvasRef} className="pointer-events-none absolute left-0 top-0 h-full w-full" />
+          {isPlaying ? 'Pause' : 'Play'}
+        </button>
+        <button onClick={() => setShowSkeleton((v) => !v)} aria-pressed={showSkeleton} className={toggleButtonClass(showSkeleton)}>
+          {showSkeleton ? 'Hide skeleton' : 'Show skeleton'}
+        </button>
+        <button onClick={() => setOverlapMode((v) => !v)} aria-pressed={overlapMode} className={toggleButtonClass(overlapMode)}>
+          {overlapMode ? 'Side by side' : 'Overlap'}
+        </button>
+      </div>
+
+      <div className={paneWrapperClass} style={paneWrapperStyle} data-testid={overlapMode ? 'overlap-pane' : undefined}>
+        <div className={paneClass} style={paneStyle} data-testid={overlapMode ? undefined : 'user-video-pane'}>
+          <video ref={userVideoRef} src={userVideoUrl} className={overlapMode ? 'opacity-70' : undefined} style={userCropStyle} />
+          <canvas ref={userCanvasRef} className="pointer-events-none" style={userCropStyle} />
+        </div>
+        <div className={paneClass} style={paneStyle} data-testid={overlapMode ? undefined : 'reference-video-pane'}>
+          <video
+            ref={referenceVideoRef}
+            src={referenceVideoUrl}
+            className={overlapMode ? 'opacity-70' : undefined}
+            style={referenceCropStyle}
+          />
+          <canvas ref={referenceCanvasRef} className="pointer-events-none" style={referenceCropStyle} />
         </div>
       </div>
 
@@ -175,7 +314,7 @@ export function ComparisonView({
           max={path.length - 1}
           step={1}
           value={pairIndex}
-          onChange={(e) => setPairIndex(Number(e.target.value))}
+          onChange={handleScrub}
           data-testid="comparison-scrubber"
           className="mt-4 h-11 w-full accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         />
