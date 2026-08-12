@@ -37,6 +37,7 @@ function createFakeVideo() {
   return {
     currentTime: 0,
     readyState: 0,
+    error: null as MediaError | null,
     addEventListener: (event: string, cb: () => void) => {
       listeners[event] = listeners[event] ?? []
       listeners[event].push(cb)
@@ -133,5 +134,14 @@ describe('waitForMetadata', () => {
 
     fakeVideo.dispatchError()
     await expect(promise).rejects.toThrow('Video failed to load before metadata was available')
+  })
+
+  it('rejects immediately if video.error is already set before this function is even called', async () => {
+    const fakeVideo = createFakeVideo()
+    fakeVideo.error = {} as MediaError // simulates the error event having already fired earlier
+
+    await expect(waitForMetadata(fakeVideo as unknown as HTMLVideoElement)).rejects.toThrow(
+      'Video failed to load before metadata was available'
+    )
   })
 })

@@ -22,3 +22,6 @@ venv/
 
 # Subagent-driven development scratch workspace (ledgers, briefs, reports)
 .superpowers/
+
+# Local scratch test videos — not referenced by any code path
+Videos/

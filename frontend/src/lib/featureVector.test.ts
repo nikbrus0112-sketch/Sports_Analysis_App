@@ -78,9 +78,19 @@ describe('computeFeatureVectors', () => {
     expect(rows.flat().some(Number.isNaN)).toBe(false)
   })
 
-  it('falls back to a zero vector for leading null frames', () => {
+  it('backward-fills leading null frames with the first valid detection instead of zero', () => {
     const rows = computeFeatureVectors(sequence([frame(0, null), frame(1, poseWithLeftElbowAngle(90))]))
+    expect(rows[0][leftElbowIdx]).toBe(90)
+    expect(rows[1][leftElbowIdx]).toBe(90)
+    // No spurious velocity spike at the null->valid boundary since both frames
+    // report the same (backward-filled) angle.
+    expect(rows[1][NUM_ANGLES + leftElbowIdx]).toBe(0)
+  })
+
+  it('falls back to a zero vector when no frame in the whole sequence has a valid detection', () => {
+    const rows = computeFeatureVectors(sequence([frame(0, null), frame(1, null)]))
     expect(rows[0][leftElbowIdx]).toBe(0)
+    expect(rows[1][leftElbowIdx]).toBe(0)
   })
 })
 

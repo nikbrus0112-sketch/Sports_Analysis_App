@@ -38,7 +38,16 @@ def _list_reference_clips(reference_clips_dir: Path, motion_type: str | None) ->
         return []
 
     if motion_type is not None:
-        motion_dirs = [reference_clips_dir / motion_type]
+        try:
+            candidate = (reference_clips_dir / motion_type).resolve()
+            candidate.relative_to(reference_clips_dir.resolve())
+        except (ValueError, RuntimeError):
+            # ValueError: candidate isn't a descendant of reference_clips_dir
+            # (traversal or an absolute-path override). RuntimeError: pathlib's
+            # symlink-loop error. Either way, degrade to "not found" like any
+            # other unknown motion_type, not a 500.
+            return []
+        motion_dirs = [candidate]
     else:
         motion_dirs = sorted(p for p in reference_clips_dir.iterdir() if p.is_dir())
 
@@ -52,7 +61,12 @@ def _list_reference_clips(reference_clips_dir: Path, motion_type: str | None) ->
                 # ponytail: skip incomplete clip directories instead of erroring —
                 # curation is manual, partial dirs are an expected mid-edit state.
                 continue
-            metadata = json.loads(metadata_path.read_text())
+            try:
+                metadata = json.loads(metadata_path.read_text())
+            except json.JSONDecodeError:
+                # Same mid-edit tolerance as a missing file — a corrupt/empty
+                # metadata.json in one clip shouldn't 500 the whole listing.
+                continue
             video_paths = sorted(clip_dir.glob("video.*"))
             pose_path = clip_dir / "pose.json"
             clips.append(

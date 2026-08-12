@@ -116,3 +116,35 @@ def test_404_for_a_clip_file_that_does_not_exist(tmp_path):
     response = client.get("/reference-clips/freestyle/nonexistent-clip/video.mp4")
 
     assert response.status_code == 404
+
+
+def test_rejects_path_traversal_in_motion_type(tmp_path):
+    clips_dir = tmp_path / "reference_clips"
+    _write_clip(clips_dir, "freestyle", "clip-1", metadata={"camera_angle_note": "a", "source_or_license_note": "b"})
+    # A sibling directory outside reference_clips_dir with its own metadata.json —
+    # a traversal should never be able to reach or leak this.
+    secret_dir = tmp_path / "secret_area" / "leaked_clip"
+    secret_dir.mkdir(parents=True)
+    (secret_dir / "metadata.json").write_text(json.dumps({"camera_angle_note": "leaked", "source_or_license_note": "leaked"}))
+
+    app = create_app(reference_clips_dir=clips_dir)
+    client = TestClient(app)
+
+    response = client.get("/api/reference-clips", params={"motion_type": "../secret_area"})
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_skips_clip_directory_with_malformed_metadata_json_instead_of_500ing(tmp_path):
+    _write_clip(tmp_path, "freestyle", "clip-1", metadata={"camera_angle_note": "a", "source_or_license_note": "b"})
+    bad_clip_dir = tmp_path / "freestyle" / "clip-2"
+    bad_clip_dir.mkdir(parents=True)
+    (bad_clip_dir / "metadata.json").write_text("")  # empty/malformed — not valid JSON
+    app = create_app(reference_clips_dir=tmp_path)
+    client = TestClient(app)
+
+    response = client.get("/api/reference-clips")
+
+    assert response.status_code == 200
+    assert [clip["id"] for clip in response.json()] == ["clip-1"]

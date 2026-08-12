@@ -16,7 +16,9 @@ layout. A clip directory missing `metadata.json` is skipped, not an error.
 An empty or missing `reference_clips/` directory is valid too — the endpoint
 returns `[]`.
 
-This directory currently has no clips checked in — see
-`docs/superpowers/plans/2026-08-04-reference-library-milestone-2.md` for how
-to produce a `pose.json` (the `frontend/reference-tool.html` dev tool) and
-where to place it.
+This directory currently ships one starter clip — `freestyle/clip-1` — as a
+worked example. Add more by producing a `pose.json` via
+`frontend/reference-tool.html` (see
+`docs/superpowers/plans/2026-08-04-reference-library-milestone-2.md`) and
+placing it in a new `<motion_type>/<clip_id>/` directory alongside a
+`video.<ext>` and a hand-written `metadata.json`.

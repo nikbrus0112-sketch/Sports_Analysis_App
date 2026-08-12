@@ -56,6 +56,16 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByText('Try another video')).toBeInTheDocument())
   })
 
+  it('returns to the upload screen instead of hanging forever when pose estimation rejects', async () => {
+    mockEstimateSequence.mockRejectedValue(new Error('Video failed to load before metadata was available'))
+    render(<App />)
+    const file = new File(['dummy'], 'clip.mp4', { type: 'video/mp4' })
+    await userEvent.upload(screen.getByTestId('file-upload-input'), file)
+
+    await waitFor(() => expect(screen.getByTestId('file-upload-input')).toBeInTheDocument())
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
+  })
+
   it('resets to idle and revokes the object URL on "Try another video"', async () => {
     mockEstimateSequence.mockResolvedValue(fakeSequence)
     render(<App />)
