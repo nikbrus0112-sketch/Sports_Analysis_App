@@ -21,3 +21,35 @@ export function seekTo(video: HTMLVideoElement, timeSec: number): Promise<void> 
     video.currentTime = timeSec
   })
 }
+
+const HAVE_METADATA_READY_STATE = 1
+
+export function waitForMetadata(video: HTMLVideoElement): Promise<void> {
+  if (video.error) {
+    // The video's one-shot 'error' event may have already fired (and won't
+    // fire again) before this function was even called — e.g. while
+    // ensureLandmarker's multi-second MediaPipe init was still running.
+    // Without this check, listeners attached below would never fire and the
+    // promise would hang forever instead of rejecting.
+    return Promise.reject(new Error('Video failed to load before metadata was available'))
+  }
+  if (video.readyState >= HAVE_METADATA_READY_STATE) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      video.removeEventListener('loadedmetadata', onLoadedMetadata)
+      video.removeEventListener('error', onError)
+    }
+    const onLoadedMetadata = () => {
+      cleanup()
+      resolve()
+    }
+    const onError = () => {
+      cleanup()
+      reject(new Error('Video failed to load before metadata was available'))
+    }
+    video.addEventListener('loadedmetadata', onLoadedMetadata)
+    video.addEventListener('error', onError)
+  })
+}

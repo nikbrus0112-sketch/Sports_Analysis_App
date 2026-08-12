@@ -1,6 +1,6 @@
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision'
 import { useCallback, useEffect, useRef } from 'react'
-import { computeFrameCount, frameTimestampMs, seekTo } from '../lib/frameExtraction'
+import { computeFrameCount, frameTimestampMs, seekTo, waitForMetadata } from '../lib/frameExtraction'
 import { smoothSequence } from '../lib/oneEuroFilter'
 import type { PoseFrame, PoseSequence } from '../lib/poseTypes'
 
@@ -40,8 +40,12 @@ export function usePoseEstimation() {
       delegateRef.current = 'GPU'
     } catch (err) {
       console.warn('GPU delegate init failed, falling back to CPU', err)
-      landmarkerRef.current = await createPoseLandmarker('CPU')
-      delegateRef.current = 'CPU'
+      try {
+        landmarkerRef.current = await createPoseLandmarker('CPU')
+        delegateRef.current = 'CPU'
+      } catch (cpuErr) {
+        throw new Error(`Failed to initialize MediaPipe PoseLandmarker on both GPU and CPU: ${String(cpuErr)}`)
+      }
     }
     console.info(`PoseLandmarker initialized with delegate=${delegateRef.current}`)
     return landmarkerRef.current
@@ -51,6 +55,8 @@ export function usePoseEstimation() {
     async (video: HTMLVideoElement, options: EstimateSequenceOptions): Promise<PoseSequence> => {
       const { targetFps, onProgress } = options
       const landmarker = await ensureLandmarker()
+
+      await waitForMetadata(video)
 
       const durationSec = video.duration
       const frameCount = computeFrameCount(durationSec, targetFps)

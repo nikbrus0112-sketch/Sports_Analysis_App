@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { computeFrameCount, frameIndexForTime, frameTimestampMs, seekTo } from './frameExtraction'
+import { computeFrameCount, frameIndexForTime, frameTimestampMs, seekTo, waitForMetadata } from './frameExtraction'
 
 describe('computeFrameCount', () => {
   it('multiplies duration by target fps, floored', () => {
@@ -36,6 +36,8 @@ function createFakeVideo() {
   const listeners: Record<string, Array<() => void>> = {}
   return {
     currentTime: 0,
+    readyState: 0,
+    error: null as MediaError | null,
     addEventListener: (event: string, cb: () => void) => {
       listeners[event] = listeners[event] ?? []
       listeners[event].push(cb)
@@ -45,6 +47,12 @@ function createFakeVideo() {
     },
     dispatchSeeked: () => {
       ;(listeners['seeked'] ?? []).forEach((cb) => cb())
+    },
+    dispatchLoadedMetadata: () => {
+      ;(listeners['loadedmetadata'] ?? []).forEach((cb) => cb())
+    },
+    dispatchError: () => {
+      ;(listeners['error'] ?? []).forEach((cb) => cb())
     },
   }
 }
@@ -85,5 +93,55 @@ describe('seekTo', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(resolved).toBe(true)
+  })
+})
+
+describe('waitForMetadata', () => {
+  it('resolves without registering a listener when readyState already indicates metadata is loaded', async () => {
+    const fakeVideo = createFakeVideo()
+    fakeVideo.readyState = 1
+
+    await expect(waitForMetadata(fakeVideo as unknown as HTMLVideoElement)).resolves.toBeUndefined()
+  })
+
+  it('does not resolve before loadedmetadata fires when starting from an unloaded state', async () => {
+    const fakeVideo = createFakeVideo()
+    let resolved = false
+    waitForMetadata(fakeVideo as unknown as HTMLVideoElement).then(() => {
+      resolved = true
+    })
+
+    await Promise.resolve()
+    expect(resolved).toBe(false)
+
+    fakeVideo.dispatchLoadedMetadata()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(resolved).toBe(true)
+  })
+
+  it('resolves once loadedmetadata fires', async () => {
+    const fakeVideo = createFakeVideo()
+    const promise = waitForMetadata(fakeVideo as unknown as HTMLVideoElement)
+
+    fakeVideo.dispatchLoadedMetadata()
+    await expect(promise).resolves.toBeUndefined()
+  })
+
+  it('rejects if the error event fires before loadedmetadata', async () => {
+    const fakeVideo = createFakeVideo()
+    const promise = waitForMetadata(fakeVideo as unknown as HTMLVideoElement)
+
+    fakeVideo.dispatchError()
+    await expect(promise).rejects.toThrow('Video failed to load before metadata was available')
+  })
+
+  it('rejects immediately if video.error is already set before this function is even called', async () => {
+    const fakeVideo = createFakeVideo()
+    fakeVideo.error = {} as MediaError // simulates the error event having already fired earlier
+
+    await expect(waitForMetadata(fakeVideo as unknown as HTMLVideoElement)).rejects.toThrow(
+      'Video failed to load before metadata was available'
+    )
   })
 })
