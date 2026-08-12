@@ -59,7 +59,7 @@ const path: [number, number][] = [
   [2, 2],
 ]
 
-const flags: CheckpointFlag[] = [{ phase: 1, joint: 'leftElbow', userValue: 110, referenceValue: 90, delta: 20 }]
+const flags: CheckpointFlag[] = [{ phase: 1, userFrameIdx: 1, joint: 'leftElbow', userValue: 110, referenceValue: 90, delta: 20 }]
 
 function renderView(overrides: Partial<Parameters<typeof ComparisonView>[0]> = {}) {
   render(
@@ -100,6 +100,30 @@ describe('ComparisonView', () => {
     expect(screen.getByText('90.0')).toBeInTheDocument()
     expect(screen.getByText('20.0')).toBeInTheDocument()
     expect(screen.queryByText('No flags at this frame.')).not.toBeInTheDocument()
+  })
+
+  it('only shows the flag matching the current userFrameIdx, not every flag sharing the same referenceFrameIdx', () => {
+    // A DTW "up" run: pairs 0 and 1 both align to referenceFrameIdx 0, with
+    // different userFrameIdx — each carries its own distinct flag.
+    const upRunPath: [number, number][] = [
+      [0, 0],
+      [1, 0],
+      [2, 1],
+    ]
+    const upRunFlags: CheckpointFlag[] = [
+      { phase: 0, userFrameIdx: 0, joint: 'leftElbow', userValue: 100, referenceValue: 90, delta: 10 },
+      { phase: 0, userFrameIdx: 1, joint: 'leftElbow', userValue: 150, referenceValue: 90, delta: 60 },
+    ]
+    renderView({ path: upRunPath, flags: upRunFlags })
+
+    // pairIndex 0 -> userFrameIdx 0 -> only the first flag's values should show.
+    expect(screen.getByText('100.0')).toBeInTheDocument()
+    expect(screen.queryByText('150.0')).not.toBeInTheDocument()
+
+    // pairIndex 1 -> userFrameIdx 1, same referenceFrameIdx 0 -> only the second flag now.
+    fireEvent.change(screen.getByTestId('comparison-scrubber'), { target: { value: '1' } })
+    expect(screen.getByText('150.0')).toBeInTheDocument()
+    expect(screen.queryByText('100.0')).not.toBeInTheDocument()
   })
 
   it('renders a fallback message instead of a scrubber when path is empty', () => {

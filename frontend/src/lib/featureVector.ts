@@ -13,12 +13,15 @@ export const FEATURE_VECTOR_LENGTH = NUM_ANGLES * 3 // angles + velocity + accel
 export function computeAngleRows(sequence: PoseSequence): number[][] {
   // ponytail: holds last valid angle vector across null-landmark gaps instead of
   // interpolating — revisit if gaps are long/frequent in practice.
-  let lastValid = new Array(NUM_ANGLES).fill(0)
-  return sequence.frames.map((frame) => {
-    const angles = computeJointAngles(frame.landmarksSmoothed)
-    // ponytail: leading null frames (before the first valid detection) fall back
-    // to a zero vector — fine for short gaps, revisit if a clip starts with a
-    // long one (e.g. drop leading frames instead).
+  const perFrameAngles = sequence.frames.map((frame) => computeJointAngles(frame.landmarksSmoothed))
+  // Leading null frames (before the first valid detection) backward-fill from
+  // that first detection instead of a zero vector — a zero angle is nonsensical
+  // (falsely flags every joint as ~90deg off) and creates a spurious velocity
+  // spike at the null->valid boundary. Only a whole-sequence-null clip (no
+  // detection anywhere) falls back to zero.
+  const firstValid = perFrameAngles.find((angles): angles is number[] => angles !== null) ?? new Array(NUM_ANGLES).fill(0)
+  let lastValid = firstValid
+  return perFrameAngles.map((angles) => {
     if (angles) lastValid = angles
     return lastValid
   })

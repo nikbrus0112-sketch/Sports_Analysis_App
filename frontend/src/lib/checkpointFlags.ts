@@ -18,6 +18,14 @@ export interface CheckpointFlag {
    * a claim that real phase detection exists.
    */
   phase: number
+  /**
+   * DTW path's user-side frame index for this exact aligned pair — needed
+   * alongside `phase` because multiple pairs can share the same `phase`
+   * (reference frame) with different user frames (a DTW "up" run), and a
+   * consumer filtering only by `phase` would otherwise render duplicate
+   * rows for the same joint at a single scrubber position.
+   */
+  userFrameIdx: number
   joint: string // one of JOINT_ANGLE_NAMES
   userValue: number
   referenceValue: number
@@ -50,6 +58,7 @@ export function computeCheckpointFlags(
       if (Math.abs(delta) > thresholdDeg) {
         flags.push({
           phase: referenceFrameIdx,
+          userFrameIdx,
           joint,
           userValue: userAngles[k],
           referenceValue: referenceAngles[k],

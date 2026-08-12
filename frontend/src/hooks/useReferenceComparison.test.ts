@@ -233,6 +233,77 @@ describe('useReferenceComparison', () => {
     })
   })
 
+  it('does not serve a different motion type\'s cached pose data when clip ids collide across motion types', async () => {
+    const freestyleClip = clipFixture('clip-1')
+    const butterflyClip = {
+      ...clipFixture('clip-1'),
+      motion_type: 'butterfly',
+      video_url: '/reference-clips/butterfly/clip-1/video.mp4',
+      pose_data_url: '/reference-clips/butterfly/clip-1/pose.json',
+    }
+    const freestyleSequence = fakeSequence(10)
+    const butterflySequence = fakeSequence(20)
+    mockFetchReferenceClips.mockResolvedValueOnce([freestyleClip]).mockResolvedValueOnce([butterflyClip])
+    mockFetchPoseSequence.mockImplementation((url: string) =>
+      Promise.resolve(url.includes('freestyle') ? freestyleSequence : butterflySequence)
+    )
+
+    const userSequence = fakeSequence(10)
+    const { result, rerender } = renderHook(
+      ({ motionType }: { motionType: string }) => useReferenceComparison(userSequence, motionType),
+      { initialProps: { motionType: 'freestyle' } }
+    )
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    if (result.current.status !== 'ready') throw new Error('expected ready')
+    expect(result.current.referenceSequence).toBe(freestyleSequence)
+
+    rerender({ motionType: 'butterfly' })
+    await waitFor(() => {
+      if (result.current.status !== 'ready') throw new Error('expected ready')
+      // Both clips are id='clip-1' — must not return the cached freestyle sequence.
+      expect(result.current.referenceSequence).toBe(butterflySequence)
+    })
+  })
+
+  it('keeps status "ready" with the previous alignment while a clip switch is still fetching, instead of flashing to "loading"', async () => {
+    mockFetchReferenceClips.mockResolvedValue([clipFixture('clip-1'), clipFixture('clip-2')])
+    const sequenceA = fakeSequence(10)
+    let resolveSecondFetch!: (seq: PoseSequence) => void
+    const secondFetchPromise = new Promise<PoseSequence>((resolve) => {
+      resolveSecondFetch = resolve
+    })
+    mockFetchPoseSequence.mockImplementation((url: string) =>
+      url.includes('clip-1') ? Promise.resolve(sequenceA) : secondFetchPromise
+    )
+
+    const userSequence = fakeSequence(10)
+    const { result } = renderHook(() => useReferenceComparison(userSequence, 'freestyle'))
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    if (result.current.status !== 'ready') throw new Error('expected ready')
+    expect(result.current.referenceSequence).toBe(sequenceA)
+
+    act(() => {
+      if (result.current.status === 'ready') result.current.selectReferenceClip(1)
+    })
+
+    // The clip-2 fetch is still in flight (unresolved) — status must still be
+    // 'ready', still showing the previous (clip-1) alignment, not an
+    // intermediate 'loading' state that would unmount the comparison view.
+    expect(result.current.status).toBe('ready')
+    if (result.current.status !== 'ready') throw new Error('expected ready')
+    expect(result.current.referenceSequence).toBe(sequenceA)
+
+    const sequenceB = fakeSequence(20)
+    await act(async () => {
+      resolveSecondFetch(sequenceB)
+      await secondFetchPromise
+    })
+    await waitFor(() => {
+      if (result.current.status !== 'ready') throw new Error('expected ready')
+      expect(result.current.referenceSequence).toBe(sequenceB)
+    })
+  })
+
   it("refetches with the new motion type and resets stale state when motionType changes, rather than keeping the old motion's clips", async () => {
     mockFetchReferenceClips
       .mockResolvedValueOnce([clipFixture('clip-1')]) // freestyle

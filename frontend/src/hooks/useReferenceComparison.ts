@@ -102,15 +102,22 @@ export function useReferenceComparison(userSequence: PoseSequence | null, motion
     if (!clipVideoUrl || !clipPoseDataUrl) return // defensive; effect 1 already filters these out
 
     let cancelled = false
-    setPhase('loading')
+    // Only enter 'loading' when there's no ready alignment to keep showing —
+    // otherwise a clip switch (cache hit or miss) would unmount the whole
+    // comparison view for the duration of the fetch/recompute. The stale
+    // alignment stays visible until the new one replaces it.
+    setPhase((prev) => (prev === 'ready' ? prev : 'loading'))
 
     const run = async () => {
       try {
-        let referenceSequence = poseCache.current.get(clip.id)
+        // Keyed by the pose-data URL, not clip.id — ids are only unique
+        // within one motion type's directory, so two different motion types
+        // can have colliding clip ids (e.g. both 'clip-1').
+        let referenceSequence = poseCache.current.get(clipPoseDataUrl)
         if (!referenceSequence) {
           referenceSequence = await fetchPoseSequence(clipPoseDataUrl)
           if (cancelled) return
-          poseCache.current.set(clip.id, referenceSequence)
+          poseCache.current.set(clipPoseDataUrl, referenceSequence)
         }
 
         const userVectors = computeFeatureVectors(userSequence)

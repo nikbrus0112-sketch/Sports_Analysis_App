@@ -55,7 +55,7 @@ describe('computeCheckpointFlags', () => {
     const user = sequence([frame(0, poseWithLeftElbowAngle(110))])
     const reference = sequence([frame(0, poseWithLeftElbowAngle(90))])
     const flags = computeCheckpointFlags(user, reference, [[0, 0]])
-    expect(flags).toEqual([{ phase: 0, joint: 'leftElbow', userValue: 110, referenceValue: 90, delta: 20 }])
+    expect(flags).toEqual([{ phase: 0, userFrameIdx: 0, joint: 'leftElbow', userValue: 110, referenceValue: 90, delta: 20 }])
   })
 
   it('does not flag a delta just under the default threshold (boundary)', () => {
@@ -98,8 +98,20 @@ describe('computeCheckpointFlags', () => {
     const user = sequence([frame(0, poseWithLeftElbowAngle(95))])
     const reference = sequence([frame(0, poseWithLeftElbowAngle(90))])
     expect(computeCheckpointFlags(user, reference, [[0, 0]], 3)).toEqual([
-      { phase: 0, joint: 'leftElbow', userValue: 95, referenceValue: 90, delta: 5 },
+      { phase: 0, userFrameIdx: 0, joint: 'leftElbow', userValue: 95, referenceValue: 90, delta: 5 },
     ])
     expect(computeCheckpointFlags(user, reference, [[0, 0]], 10)).toEqual([])
+  })
+
+  it('tags each flag with its own userFrameIdx, so same-reference-frame DTW runs stay distinguishable', () => {
+    const user = sequence([frame(0, poseWithLeftElbowAngle(110)), frame(1, poseWithLeftElbowAngle(130))])
+    const reference = sequence([frame(0, poseWithLeftElbowAngle(90))])
+    // Both user frames aligned to the same reference frame (a DTW "up" run).
+    const flags = computeCheckpointFlags(user, reference, [
+      [0, 0],
+      [1, 0],
+    ])
+    expect(flags.map((f) => f.userFrameIdx)).toEqual([0, 1])
+    expect(flags.every((f) => f.phase === 0)).toBe(true)
   })
 })

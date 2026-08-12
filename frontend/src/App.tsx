@@ -31,18 +31,26 @@ export function App() {
 
   const handleVideoElementReady = useCallback(
     (video: HTMLVideoElement) => {
+      if (poseSequence) return // already have one — avoid re-running estimation on a stray remount
       const run = async () => {
-        const sequence = await estimateSequence(video, {
-          targetFps: TARGET_FPS,
-          onProgress: (current, total) => setProgress({ current, total }),
-        })
-        video.currentTime = 0
-        setPoseSequence(sequence)
-        setState('ready')
+        try {
+          const sequence = await estimateSequence(video, {
+            targetFps: TARGET_FPS,
+            onProgress: (current, total) => setProgress({ current, total }),
+          })
+          video.currentTime = 0
+          setPoseSequence(sequence)
+          setState('ready')
+        } catch (err) {
+          console.error('Pose estimation failed', err)
+          if (videoUrl) URL.revokeObjectURL(videoUrl)
+          setVideoUrl(null)
+          setState('idle')
+        }
       }
       run()
     },
-    [estimateSequence]
+    [estimateSequence, poseSequence, videoUrl]
   )
 
   const handleReset = () => {

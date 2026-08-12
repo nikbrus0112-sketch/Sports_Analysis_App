@@ -216,7 +216,7 @@ export function ComparisonView({
     setPairIndex(Number(e.target.value))
   }
 
-  const currentFlags = flags.filter((f) => f.phase === referenceFrameIdx)
+  const currentFlags = flags.filter((f) => f.phase === referenceFrameIdx && f.userFrameIdx === userFrameIdx)
 
   const userPositionedBox = positionBoxAt(
     userBox,
