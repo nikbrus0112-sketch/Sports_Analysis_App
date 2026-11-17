@@ -51,7 +51,7 @@ they aren't silently dropped, just sequenced later.
 
 ### Platform
 
-Web app. Frontend in React (or plain JS/Canvas is fine too — Claude Code's
+Web app. Frontend in React (or plain JS/Canvas is fine too — implementer's
 call). A light backend (Node or Python) mainly serves the curated reference
 library and its pre-computed pose data; it doesn't need to do heavy compute.
 

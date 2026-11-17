@@ -6,7 +6,7 @@ Seven feature milestones have shipped with zero visual design — every screen u
 
 ## Process
 
-Ran `~/.claude/skills/ui-ux-pro-max/scripts/search.py --design-system` with several keyword combinations. The skill's own landing-page-oriented pattern recommendations (Hero-Centric, Video-First Hero, Real-Time Operations Landing) don't apply — this app has no marketing page, it's a single functional tool — so those were discarded in favor of applying the STYLE/COLOR/TYPOGRAPHY/UX-rule outputs directly to the app's real 4 screens.
+Ran the ui-ux-pro-max design-system search (`search.py --design-system`) with several keyword combinations. The skill's own landing-page-oriented pattern recommendations (Hero-Centric, Video-First Hero, Real-Time Operations Landing) don't apply — this app has no marketing page, it's a single functional tool — so those were discarded in favor of applying the STYLE/COLOR/TYPOGRAPHY/UX-rule outputs directly to the app's real 4 screens.
 
 ## Design system
 
